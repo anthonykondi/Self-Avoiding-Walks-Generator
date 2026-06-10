@@ -260,10 +260,10 @@ def calc_forall_lengths(x: np.ndarray, func: callable) -> np.ndarray:
 # Max for 2D = 10000 (speed diminishes quickly for bigger N)
 # No max for 3D, appears to steadily grow at a rate of 12,000 vertices/second (diminishes negligibly over larger N)
 
-data = get_SAW_naive_v2(N=1000000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D)
+data = get_SAW_naive_v2(N=4000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D)
 
 start_t = time.time()
-processed_data = calc_forall_lengths(data[0], ete_dist)
+processed_data = calc_forall_lengths(data[0], mean_ete_dist)
 end_t = time.time()
 
 print("GENERATION TIME: ", round(data[2], 2))
