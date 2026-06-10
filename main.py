@@ -226,7 +226,8 @@ def ete_dist(x):
     return (norm(x[-1] - x[0])) ** 2
 
 
-def rad_gyr(x):        # Note: this and mean end to end distance take way longer to calcualte
+# For large SAWs these values take much longer to calculate due to the loops
+def rad_gyr(x):
     x_mean = np.mean(x, axis=0)
     val = 0
     for i in range(len(x)):
@@ -255,22 +256,71 @@ def calc_forall_lengths(x: np.ndarray, func: callable) -> np.ndarray:
     return np.array(values)
 
 
+def save_data(saw_data: tuple, id: int, N_max: int) -> None:
+    """
+    This will append the inputted saw_data, from a generation of a set length (in this case 10,000
+    for testing purposes). 
+    """
+    x_arr = saw_data[0]
+    file_name = f"saw_data_id_{id}_Nmax_{N_max}.npz"
+    ete_dists_new = calc_forall_lengths(x_arr, ete_dist)
+    
+    try:     #check if the file exists
+        previous_data = np.load(file_name)
+    except FileNotFoundError:    #the file hasn't been made yet
+        np.savez(file=file_name, 
+                 N=1, 
+                 sm_ete_dists=ete_dists_new,
+                 sv_ete_dists=0)
+        return None
+    
+    N_old = previous_data["N"]
+    sm_ete_dists_old = previous_data["sm_ete_dists"]
+    sv_ete_dists_old = previous_data["sv_ete_dists"]
+
+    # applying incremental updates to sample means and sample variances 
+    N_new = N_old + 1
+    sm_ete_dists_new = sm_ete_dists_old + (ete_dists_new - sm_ete_dists_old) / N_new
+    sv_ete_dists_new = sv_ete_dists_old + (ete_dists_new - sm_ete_dists_new) * (ete_dists_new - sm_ete_dists_old)
+
+    # adding the new data to the file
+    np.savez(file=file_name,
+             N=N_new,
+             sm_ete_dists=sm_ete_dists_new,
+             sv_ete_dists=sv_ete_dists_new)
+    
+    return None
+
+
+def accumulate_data(vcv, vti, N, id):
+    data = get_SAW_naive_v2(N=N, vcv=vcv, vti=vti)
+    save_data(saw_data=data, id=id, N_max=N)
+
+
+def plot_stats(stat_arr):
+    pass
+
 ### RUNNING THE CODE ###
 
 # Max for 2D = 10000 (speed diminishes quickly for bigger N)
 # No max for 3D, appears to steadily grow at a rate of 12,000 vertices/second (diminishes negligibly over larger N)
 
-data = get_SAW_naive_v2(N=4000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D)
+# data = get_SAW_naive_v2(N=4000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D)
 
-start_t = time.time()
-processed_data = calc_forall_lengths(data[0], mean_ete_dist)
-end_t = time.time()
+# start_t = time.time()
+# processed_data = calc_forall_lengths(data[0], ete_dist)
+# end_t = time.time()
 
-print("GENERATION TIME: ", round(data[2], 2))
-print("CALCULATION TIME:", round(end_t - start_t), 2)
+# print("GENERATION TIME: ", round(data[2], 2))
+# print("CALCULATION TIME:", round(end_t - start_t), 2)
 
-count_arr = np.arange(1, len(data[0]))
+# count_arr = np.arange(1, len(data[0]))
 
-plot_SAW(data[0])
-plt.plot(count_arr, processed_data)
-plt.show()
+# plot_SAW(data[0])
+# plt.plot(count_arr, processed_data)
+# plt.show()
+
+# accumulate_data(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, id=420)
+
+data = np.load("saw_data_id_420_Nmax_10000.npz")
+print(np.shape(data["sv_ete_dists"]))
