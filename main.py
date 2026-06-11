@@ -3,6 +3,7 @@ from numpy import sqrt
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
 import time
+from pathlib import Path
 
 rng = np.random.default_rng()     # seed 123 for testing
 
@@ -168,7 +169,7 @@ def get_SAW_naive_v2(
 
     while t < N:    # need to add N vertices for a total of N + 1 vetices 
         n_iter += 1
-        print("N_VERTICES:", len(x))
+        # print("N_VERTICES:", len(x))
 
         current_vert_type = vert_type[-1]
         num_v_options = len(vcv[current_vert_type])
@@ -252,7 +253,7 @@ def calc_forall_lengths(x: np.ndarray, func: callable) -> np.ndarray:
         x_truncated = x[:n]
         val = func(x_truncated)
         values.append(val)
-        print("PROCESSED:", n)
+        # print("PROCESSED:", n)
     return np.array(values)
 
 
@@ -262,16 +263,20 @@ def save_data(saw_data: tuple, id: int, N_max: int) -> None:
     for testing purposes). 
     """
     x_arr = saw_data[0]
-    file_name = f"saw_data_id_{id}_Nmax_{N_max}.npz"
+    file_name = f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}.npz"
     ete_dists_new = calc_forall_lengths(x_arr, ete_dist)
     
-    try:     #check if the file exists
+    saw_dir_path = Path("./SAW_data_files")
+    if not saw_dir_path.is_dir():      # checking if directory exits and making it if not
+        saw_dir_path.mkdir(exist_ok=True)
+
+    try:                               # checking if the file exists in the directory
         previous_data = np.load(file_name)
-    except FileNotFoundError:    #the file hasn't been made yet
+    except FileNotFoundError:          # the file hasn't been made yet
         np.savez(file=file_name, 
                  N=1, 
                  sm_ete_dists=ete_dists_new,
-                 sv_ete_dists=0)
+                 sv_ete_dists=np.zeros(shape=np.shape(ete_dists_new)))
         return None
     
     N_old = previous_data["N"]
@@ -281,9 +286,10 @@ def save_data(saw_data: tuple, id: int, N_max: int) -> None:
     # applying incremental updates to sample means and sample variances 
     N_new = N_old + 1
     sm_ete_dists_new = sm_ete_dists_old + (ete_dists_new - sm_ete_dists_old) / N_new
-    sv_ete_dists_new = sv_ete_dists_old + (ete_dists_new - sm_ete_dists_new) * (ete_dists_new - sm_ete_dists_old)
+    sv_ete_dists_new = (sv_ete_dists_old + (ete_dists_new - sm_ete_dists_new) * (ete_dists_new - sm_ete_dists_old)) / (N_new - 1) 
 
     # adding the new data to the file
+    ### NEED TO CHANGE THIS TO OS.REPLACE OR SOMETHING SIMILAR
     np.savez(file=file_name,
              N=N_new,
              sm_ete_dists=sm_ete_dists_new,
@@ -298,29 +304,31 @@ def accumulate_data(vcv, vti, N, id):
 
 
 def plot_stats(stat_arr):
+    count = np.arange(1, len(stat_arr) + 1)
+    plt.plot(count, stat_arr)
+    plt.show()
+
+
+def merge_saw_files(N_max: int):
     pass
+
 
 ### RUNNING THE CODE ###
 
 # Max for 2D = 10000 (speed diminishes quickly for bigger N)
 # No max for 3D, appears to steadily grow at a rate of 12,000 vertices/second (diminishes negligibly over larger N)
 
-# data = get_SAW_naive_v2(N=4000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D)
+max_n = 20
+for n in range(max_n):
+    accumulate_data(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, id=92)
+    print(f"{n} / 100 done")
 
-# start_t = time.time()
-# processed_data = calc_forall_lengths(data[0], ete_dist)
-# end_t = time.time()
-
-# print("GENERATION TIME: ", round(data[2], 2))
-# print("CALCULATION TIME:", round(end_t - start_t), 2)
-
-# count_arr = np.arange(1, len(data[0]))
-
-# plot_SAW(data[0])
-# plt.plot(count_arr, processed_data)
-# plt.show()
-
-# accumulate_data(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, id=420)
-
-data = np.load("saw_data_id_420_Nmax_10000.npz")
+data = np.load("./SAW_data_files/saw_data_id_99_Nmax_10000.npz")
+print(data["N"])
+print(np.shape(data["sm_ete_dists"]))
 print(np.shape(data["sv_ete_dists"]))
+print(data["sm_ete_dists"][:10])
+print(data["sv_ete_dists"][:10])
+
+plot_stats(data["sm_ete_dists"])
+plot_stats(data["sv_ete_dists"])
