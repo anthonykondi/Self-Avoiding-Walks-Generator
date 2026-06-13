@@ -1,78 +1,16 @@
 import numpy as np
-from numpy import sqrt
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
 import time
 from pathlib import Path
+import os
+import multiprocessing as mp
+from lattices import *
 
 rng = np.random.default_rng()     # seed 123 for testing
 
-### VARIABLES ###
-"""
-Consist of VCVs (vertex connection vectors), and VTIs (vertex transition instructions).
-VCV: 0-idx = starting type, 1-idx = connection vector
-VTI: 0-idx = starting type, 1-idx = transitioning type
-"""
-
-# 2D LATTICES
-
-VCV_SQUARE_2D = [[[1, 0], [0, 1], [-1, 0], [0, -1]]]
-VCV_SQUARE_2D = [[np.array(vector) for vector in list] for list in VCV_SQUARE_2D]
-VTI_SQUARE_2D = [[0, 0, 0, 0]]
-
-VCV_TRIANGLE_2D = [[[1, 0], [1 / 2, sqrt(3) / 2], [-1 / 2, sqrt(3) / 2],
-                    [-1, 0], [-1 / 2, -sqrt(3) / 2], [1 / 2, -sqrt(3) / 2]]]
-VCV_TRIANGLE_2D = [[np.array(vector) for vector in list] for list in VCV_TRIANGLE_2D]
-VTI_TRIANGLE_2D = [[0, 0, 0, 0, 0, 0]]
-
-VCV_HONEYCOMB_2D = [[[0, 1], [-sqrt(3) / 2, -1 / 2], [sqrt(3) / 2, -1 / 2]], 
-                    [[0, -1], [-sqrt(3) / 2, 1 / 2], [sqrt(3) / 2, 1 / 2]]]
-VCV_HONEYCOMB_2D = [[np.array(vector) for vector in list] for list in VCV_HONEYCOMB_2D]
-VTI_HONEYCOMB_2D = [[1, 1, 1], 
-                    [0, 0, 0]]
-
-VCV_OCTAGON_2D = [[[1, 0], [-sqrt(2) / 2, sqrt(2) / 2], [-sqrt(2) / 2, -sqrt(2) / 2]], 
-                  [[0, 1], [sqrt(2) / 2, -sqrt(2) / 2], [-sqrt(2) / 2, -sqrt(2) / 2]],
-                  [[-1, 0], [sqrt(2) / 2, sqrt(2) / 2], [sqrt(2) / 2, -sqrt(2) / 2]],
-                  [[0, -1], [-sqrt(2) / 2, sqrt(2) / 2], [sqrt(2) / 2, sqrt(2) / 2]]]
-VCV_OCTAGON_2D = [[np.array(vector) for vector in list] for list in VCV_OCTAGON_2D]
-VTI_OCTAGON_2D = [[2, 1, 3],
-                  [3, 0, 2],
-                  [0, 1, 3],
-                  [1, 2, 0]]
-
-# 3D LATTICES
-
-VCV_SQUARE_3D = [[[1, 0, 0], [0, 1, 0], [-1, 0, 0], 
-                  [0, -1, 0], [0, 0, 1], [0, 0, -1]]]
-VCV_SQUARE_3D = [[np.array(vector) for vector in list] for list in VCV_SQUARE_3D]
-VTI_SQUARE_3D = [[0, 0, 0, 0, 0, 0]]
-
-VCV_TRIANGLE_3D = [[[1, 0, 0], [1 / 2, sqrt(3) / 2, 0], [-1 / 2, sqrt(3) / 2, 0], [-1, 0, 0], 
-                    [-1 / 2, -sqrt(3) / 2, 0], [1 / 2, -sqrt(3) / 2, 0], [0, 0, 1], [0, 0, -1]]]
-VCV_TRIANGLE_3D = [[np.array(vector) for vector in list] for list in VCV_TRIANGLE_3D]
-VTI_TRIANGLE_2D = [[0, 0, 0, 0, 0, 0, 0, 0]]
-
-VCV_HONEYCOMB_3D = [[[0, 1, 0], [-sqrt(3) / 2, -1 / 2, 0], [sqrt(3) / 2, -1 / 2, 0], [0, 0, 1], [0, 0, -1]], 
-                    [[0, -1, 0], [-sqrt(3) / 2, 1 / 2, 0], [sqrt(3) / 2, 1 / 2, 0], [0, 0, 1], [0, 0, -1]]]
-VCV_HONEYCOMB_3D = [[np.array(vector) for vector in list] for list in VCV_HONEYCOMB_3D]
-VTI_HONEYCOMB_3D = [[1, 1, 1, 0, 0], 
-                    [0, 0, 0, 1, 1]]
-
-VCV_OCTAGON_3D = [[[1, 0, 0], [-sqrt(2) / 2, sqrt(2) / 2, 0], [-sqrt(2) / 2, -sqrt(2) / 2, 0], [0, 0, 1], [0, 0, -1]], 
-                  [[0, 1, 0], [sqrt(2) / 2, -sqrt(2) / 2, 0], [-sqrt(2) / 2, -sqrt(2) / 2, 0], [0, 0, 1], [0, 0, -1]],
-                  [[-1, 0, 0], [sqrt(2) / 2, sqrt(2) / 2, 0], [sqrt(2) / 2, -sqrt(2) / 2, 0], [0, 0, 1], [0, 0, -1]],
-                  [[0, -1, 0], [-sqrt(2) / 2, sqrt(2) / 2, 0], [sqrt(2) / 2, sqrt(2) / 2, 0], [0, 0, 1], [0, 0, -1]]]
-VCV_OCTAGON_3D = [[np.array(vector) for vector in list] for list in VCV_OCTAGON_3D]
-VTI_OCTAGON_3D = [[2, 1, 3, 0, 0],
-                  [3, 0, 2, 1, 1],
-                  [0, 1, 3, 2, 2],
-                  [1, 2, 0, 3, 3]]
 
 ### DEFINING FUNCTIONS ###
-
-### SAW GENERATION FUNCTIONS ###
-
 
 def backtrack_num(t, A=0.8):    # returns num b/w 1 and t with exp decay probability (larger A = favour lower number)
     """
@@ -257,13 +195,12 @@ def calc_forall_lengths(x: np.ndarray, func: callable) -> np.ndarray:
     return np.array(values)
 
 
-def save_data(saw_data: tuple, id: int, N_max: int) -> None:
+def save_data(saw_data: tuple, id: int, N_max: int, lattice_type: str) -> None:
     """
     This will append the inputted saw_data, from a generation of a set length (in this case 10,000
     for testing purposes). 
     """
     x_arr = saw_data[0]
-    file_name = f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}.npz"
     ete_dists_new = calc_forall_lengths(x_arr, ete_dist)
     
     saw_dir_path = Path("./SAW_data_files")
@@ -271,36 +208,35 @@ def save_data(saw_data: tuple, id: int, N_max: int) -> None:
         saw_dir_path.mkdir(exist_ok=True)
 
     try:                               # checking if the file exists in the directory
-        previous_data = np.load(file_name)
+        with np.load(f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}_{lattice_type}.npz") as previous_data:
+            N_old = previous_data["N"]
+            sm_ete_dists_old = previous_data["sm_ete_dists"]
+            sv_ete_dists_old = previous_data["sv_ete_dists"]
     except FileNotFoundError:          # the file hasn't been made yet
-        np.savez(file=file_name, 
+        np.savez(file=f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}_{lattice_type}.npz", 
                  N=1, 
                  sm_ete_dists=ete_dists_new,
                  sv_ete_dists=np.zeros(shape=np.shape(ete_dists_new)))
         return None
-    
-    N_old = previous_data["N"]
-    sm_ete_dists_old = previous_data["sm_ete_dists"]
-    sv_ete_dists_old = previous_data["sv_ete_dists"]
 
     # applying incremental updates to sample means and sample variances 
     N_new = N_old + 1
     sm_ete_dists_new = sm_ete_dists_old + (ete_dists_new - sm_ete_dists_old) / N_new
     sv_ete_dists_new = (sv_ete_dists_old + (ete_dists_new - sm_ete_dists_new) * (ete_dists_new - sm_ete_dists_old)) / (N_new - 1) 
 
-    # adding the new data to the file
-    ### NEED TO CHANGE THIS TO OS.REPLACE OR SOMETHING SIMILAR
-    np.savez(file=file_name,
+    # adding the new data to a tmp file
+    np.savez(file=f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}_{lattice_type}_tmp.npz",
              N=N_new,
              sm_ete_dists=sm_ete_dists_new,
              sv_ete_dists=sv_ete_dists_new)
-    
-    return None
+    # atomic operation safe for when code stops running in the middle of a file override 
+    os.replace(src=f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}_{lattice_type}_tmp.npz",
+               dst=f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}_{lattice_type}.npz")
 
 
-def accumulate_data(vcv, vti, N, id):
+def accumulate_data(vcv, vti, N, id, lattice_type):
     data = get_SAW_naive_v2(N=N, vcv=vcv, vti=vti)
-    save_data(saw_data=data, id=id, N_max=N)
+    save_data(saw_data=data, id=id, N_max=N, lattice_type=lattice_type)
 
 
 def plot_stats(stat_arr):
@@ -309,8 +245,50 @@ def plot_stats(stat_arr):
     plt.show()
 
 
-def merge_saw_files(N_max: int):
-    pass
+def pool_stats(N_max: int, lattice_type: str):
+    """
+    Iterates through all npz files of matching N_max and pools their statistics into one file with id=0.
+    """
+    p = Path("./SAW_data_files/")
+    saw_paths = list(p.glob(f"*Nmax_{N_max}_{lattice_type}.npz"))
+
+    # pooled statistics
+    N_pool = 0
+    sm_ete_dists_pool = np.zeros(N_max)
+    sv_ete_dists_pool = np.zeros(N_max)
+
+    # pool statistics from all separate files
+    for path in saw_paths:
+        with np.load(path) as data:
+            N_old = data["N"]
+            sm_ete_dists_old = data["sm_ete_dists"]
+            sv_ete_dists_old = data["sv_ete_dists"]
+
+        if N_old < 2:   # to avoid 0 division errors 
+            # ADD SOME CODE TO DELETE THE FILE B/C ITS SMALL
+            continue 
+
+        w11 = (N_pool / (N_pool + N_old)) * sm_ete_dists_pool
+        w21 = (N_old / (N_pool + N_old)) * sm_ete_dists_old
+        w12 = ((N_pool - 1) / (N_pool + N_old - 2)) * sv_ete_dists_pool
+        w22 = ((N_old - 1) / (N_pool + N_old - 2)) * sv_ete_dists_old
+
+        sm_ete_dists_pool = w11 + w21
+        sv_ete_dists_pool = w12 + w22
+        N_pool += N_old
+    
+    np.savez(f"./SAW_data_files/saw_data_id_0_Nmax_{N_max}_{lattice_type}.npz",
+             N=N_pool,
+             sm_ete_dists=sm_ete_dists_pool,
+             sv_ete_dists=sv_ete_dists_pool)
+        
+
+def delete_tmp():
+    p = Path("./SAW_data_files/")
+    tmp_paths = list(p.glob("*tmp.npz"))
+    for path in tmp_paths:
+        os.remove(path)
+    
 
 
 ### RUNNING THE CODE ###
@@ -318,12 +296,16 @@ def merge_saw_files(N_max: int):
 # Max for 2D = 10000 (speed diminishes quickly for bigger N)
 # No max for 3D, appears to steadily grow at a rate of 12,000 vertices/second (diminishes negligibly over larger N)
 
-max_n = 20
-for n in range(max_n):
-    accumulate_data(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, id=92)
-    print(f"{n} / 100 done")
+delete_tmp()   # running this to always remove temporary files 
 
-data = np.load("./SAW_data_files/saw_data_id_99_Nmax_10000.npz")
+pool_stats(N_max=10000, lattice_type="3dsq")
+
+# max_n = 34
+# for n in range(max_n):
+#     accumulate_data(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, id=6157, lattice_type="3dsq")
+#     print(f"{n} / {max_n} done")
+
+data = np.load("./SAW_data_files/saw_data_id_0_Nmax_10000_3dsq.npz")
 print(data["N"])
 print(np.shape(data["sm_ete_dists"]))
 print(np.shape(data["sv_ete_dists"]))
