@@ -12,6 +12,7 @@ rng = np.random.default_rng()     # seed 123 for testing
 
 ### DEFINING FUNCTIONS ###
 
+
 def backtrack_num(t, A=0.8):    # returns num b/w 1 and t with exp decay probability (larger A = favour lower number)
     """
     Use t as an upper bound on how many walks to backtrack by
@@ -158,9 +159,6 @@ def plot_SAW(x):
     plt.show()
 
 
-### SAW DATA PROCESSING FUNCTIONS ###
-
-
 def ete_dist(x):
     return (norm(x[-1] - x[0])) ** 2
 
@@ -216,7 +214,8 @@ def save_data(saw_data: tuple, id: int, N_max: int, lattice_type: str) -> None:
         np.savez(file=f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}_{lattice_type}.npz", 
                  N=1, 
                  sm_ete_dists=ete_dists_new,
-                 sv_ete_dists=np.zeros(shape=np.shape(ete_dists_new)))
+                 sv_ete_dists=np.zeros(shape=np.shape(ete_dists_new)),
+                 lattice_type=lattice_type)
         return None
 
     # applying incremental updates to sample means and sample variances 
@@ -228,7 +227,8 @@ def save_data(saw_data: tuple, id: int, N_max: int, lattice_type: str) -> None:
     np.savez(file=f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}_{lattice_type}_tmp.npz",
              N=N_new,
              sm_ete_dists=sm_ete_dists_new,
-             sv_ete_dists=sv_ete_dists_new)
+             sv_ete_dists=sv_ete_dists_new,
+             lattice_type=lattice_type)
     # atomic operation safe for when code stops running in the middle of a file override 
     os.replace(src=f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}_{lattice_type}_tmp.npz",
                dst=f"./SAW_data_files/saw_data_id_{id}_Nmax_{N_max}_{lattice_type}.npz")
@@ -277,18 +277,68 @@ def pool_stats(N_max: int, lattice_type: str):
         sv_ete_dists_pool = w12 + w22
         N_pool += N_old
     
-    np.savez(f"./SAW_data_files/saw_data_id_0_Nmax_{N_max}_{lattice_type}.npz",
+    np.savez(f"./SAW_data_files/saw_data_id_0_Nmax_{N_max}_{lattice_type}_POOLED.npz",
              N=N_pool,
              sm_ete_dists=sm_ete_dists_pool,
-             sv_ete_dists=sv_ete_dists_pool)
+             sv_ete_dists=sv_ete_dists_pool,
+             lattice_type=lattice_type)
+    
+    for path in saw_paths:
+        os.remove(path)
+    
+    # removing POOLED signature
+    os.rename(src=f"./SAW_data_files/saw_data_id_0_Nmax_{N_max}_{lattice_type}_POOLED.npz",
+              dst=f"./SAW_data_files/saw_data_id_0_Nmax_{N_max}_{lattice_type}.npz")
+    
+
+def finish_pooling():
+    """
+    The purpouse of this function is to complete the job of pool_stats by deleting old files
+    and renaming the POOLED file if the program terminanted in the middle of its execution.
+    """
+    p = Path("./SAW_data_files/")
+    pool_files = list(p.glob("*POOLED.npz"))
+    for file in pool_files:   # iterating through each type
+        with np.load(file) as data:
+            lattice_type = data["lattice_type"]
+            sm_ete_dists = data["sm_ete_dists"]
+            N_max = np.shape(sm_ete_dists)
+            N_max = N_max[0]
         
+        # deleting old files
+        old_saw_paths = list(p.glob(f"*Nmax_{N_max}_{lattice_type}.npz"))
+        for path in old_saw_paths:
+            os.remove(path)
+        
+        # removing POOLED signature
+        os.rename(src=f"./SAW_data_files/saw_data_id_0_Nmax_{N_max}_{lattice_type}_POOLED.npz",
+                  dst=f"./SAW_data_files/saw_data_id_0_Nmax_{N_max}_{lattice_type}.npz")
+
 
 def delete_tmp():
+    """
+    The purpouse of this function is to delete temporary files created during the saving 
+    function's execution which may have been interupted by the program terminating midway.
+    """
     p = Path("./SAW_data_files/")
     tmp_paths = list(p.glob("*tmp.npz"))
     for path in tmp_paths:
         os.remove(path)
-    
+
+
+def endless_accumulation(vcv, vti, N, id, lattice_type):
+    # this function is meant to be used with the multiprocessing library
+    while True:
+        accumulate_data(vcv, vti, N, id, lattice_type)
+
+
+def initiate_processes(vcv, vti, N, lattice_type, n_processes):
+    # won't need to keep track of processes in a list or join them back to the program
+    if __name__ == "__main__":
+        for i in range(n_processes):
+            process = mp.Process(target=endless_accumulation,
+                                 args=(vcv, vti, N, i, lattice_type,))
+            process.start()
 
 
 ### RUNNING THE CODE ###
@@ -296,14 +346,18 @@ def delete_tmp():
 # Max for 2D = 10000 (speed diminishes quickly for bigger N)
 # No max for 3D, appears to steadily grow at a rate of 12,000 vertices/second (diminishes negligibly over larger N)
 
-delete_tmp()   # running this to always remove temporary files 
+delete_tmp()
+finish_pooling()
+
+max_n = 1
+for i in range(1):
+    for n in range(max_n):
+        accumulate_data(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, id=i, lattice_type="3dsq")
+        print(f"{n + 1} / {max_n} done")
+
+# initiate_processes(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, lattice_type="3dsq", n_processes=3)
 
 pool_stats(N_max=10000, lattice_type="3dsq")
-
-# max_n = 34
-# for n in range(max_n):
-#     accumulate_data(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, id=6157, lattice_type="3dsq")
-#     print(f"{n} / {max_n} done")
 
 data = np.load("./SAW_data_files/saw_data_id_0_Nmax_10000_3dsq.npz")
 print(data["N"])
