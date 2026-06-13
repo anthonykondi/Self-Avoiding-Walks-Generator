@@ -196,7 +196,9 @@ def calc_forall_lengths(x: np.ndarray, func: callable) -> np.ndarray:
 def save_data(saw_data: tuple, id: int, N_max: int, lattice_type: str) -> None:
     """
     This will append the inputted saw_data, from a generation of a set length (in this case 10,000
-    for testing purposes). 
+    for testing purposes). This also only saves end to end distance statistics because the other 2 
+    take significantly longer to compute (could modify it in the future if I figure out how to speed
+    up their calculations, perhaps through another form of parallelization).
     """
     x_arr = saw_data[0]
     ete_dists_new = calc_forall_lengths(x_arr, ete_dist)
@@ -333,11 +335,12 @@ def endless_accumulation(vcv, vti, N, id, lattice_type):
 
 
 def initiate_processes(vcv, vti, N, lattice_type, n_processes):
-    # won't need to keep track of processes in a list or join them back to the program
+    processes = []
     if __name__ == "__main__":
         for i in range(n_processes):
             process = mp.Process(target=endless_accumulation,
                                  args=(vcv, vti, N, i, lattice_type,))
+            processes.append(process)
             process.start()
 
 
@@ -346,25 +349,32 @@ def initiate_processes(vcv, vti, N, lattice_type, n_processes):
 # Max for 2D = 10000 (speed diminishes quickly for bigger N)
 # No max for 3D, appears to steadily grow at a rate of 12,000 vertices/second (diminishes negligibly over larger N)
 
-delete_tmp()
-finish_pooling()
 
-max_n = 1
-for i in range(1):
-    for n in range(max_n):
-        accumulate_data(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, id=i, lattice_type="3dsq")
-        print(f"{n + 1} / {max_n} done")
+"""
+This is here to avoid being run on the spawned child processes (only run in main.py)
+"""
+if __name__ == "__main__":
+    delete_tmp()
+    finish_pooling()
+    pool_stats(N_max=10000, lattice_type="3dsq")
 
-# initiate_processes(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, lattice_type="3dsq", n_processes=3)
 
-pool_stats(N_max=10000, lattice_type="3dsq")
+"""
+Uncomment this line to summon a number of processes to accumulate data. The only way to
+stop them is to kill the terminal (or equivalently the main program).
+"""
+initiate_processes(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, lattice_type="3dsq", n_processes=8)
 
-data = np.load("./SAW_data_files/saw_data_id_0_Nmax_10000_3dsq.npz")
-print(data["N"])
-print(np.shape(data["sm_ete_dists"]))
-print(np.shape(data["sv_ete_dists"]))
-print(data["sm_ete_dists"][:10])
-print(data["sv_ete_dists"][:10])
 
-plot_stats(data["sm_ete_dists"])
-plot_stats(data["sv_ete_dists"])
+"""
+Uncomment this line to load and view data in the pooled data file.
+"""
+# data = np.load("./SAW_data_files/saw_data_id_0_Nmax_10000_3dsq.npz")
+# print(data["N"])
+# print(np.shape(data["sm_ete_dists"]))
+# print(np.shape(data["sv_ete_dists"]))
+# print(data["sm_ete_dists"][:10])
+# print(data["sv_ete_dists"][:10])
+
+# plot_stats(data["sm_ete_dists"])
+# plot_stats(data["sv_ete_dists"])
