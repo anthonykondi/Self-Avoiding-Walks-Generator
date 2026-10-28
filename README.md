@@ -49,4 +49,3 @@ The code at the bottom of the script determines whether existing data is pooled 
 - Optimize statistical calculations, particularly those involving repeated calculations over truncated walks.
 - Improve parallel data collection, checkpointing, and recovery for long-running computations.
 - Add analysis and visualization tools to compare lattices, walk lengths, and sampling statistics.
-
