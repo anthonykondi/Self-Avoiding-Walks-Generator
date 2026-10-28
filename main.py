@@ -147,15 +147,20 @@ def get_SAW_naive_v2(
     return x_arr, n_iter, time_elapsed, n_collision
 
 
-def plot_SAW(x):
+"""Take in all outputs of get_SAW_naive_v1/2 and plot the walk"""
+def plot_SAW(saw_out):
+    x, n_iter, time_elapsed, n_collisions = saw_out
     d = len(x[0])
     if d == 2:
         plt.plot(x[:, 0], x[:, 1])
+        plt.title(f"2D SAW on the square lattice:\nIterations = {n_iter}, Time Elapsed = {round(time_elapsed, 2)}s, Collisions = {n_collisions}")
+        plt.grid(True)
     if d == 3:
         fig = plt.figure()
         ax = plt.axes(projection='3d')
         ax.plot(x[:, 0], x[:, 1], x[:, 2])
 
+    plt.savefig("plots/Example_SAW.png")
     plt.show()
 
 
@@ -188,6 +193,17 @@ def calc_forall_lengths(x: np.ndarray, func: callable) -> np.ndarray:
     for n in range(1, N_len):
         x_truncated = x[:n]
         val = func(x_truncated)
+        values.append(val)
+        # print("PROCESSED:", n)
+    return np.array(values)
+
+
+def ete_dists_all_lens(x: np.ndarray) -> np.ndarray:
+    values = []
+    N_len = len(x)
+    for n in range(1, N_len):
+        x_truncated = x[:n]
+        val = ete_dist(x_truncated)
         values.append(val)
         # print("PROCESSED:", n)
     return np.array(values)
@@ -356,25 +372,38 @@ This is here to avoid being run on the spawned child processes (only run in main
 if __name__ == "__main__":
     delete_tmp()
     finish_pooling()
+    # only run this when you have stat files with more than 2 runs of data (otherwise you get an error)
     pool_stats(N_max=10000, lattice_type="3dsq")
 
 
-"""
-Uncomment this line to summon a number of processes to accumulate data. The only way to
-stop them is to kill the terminal (or equivalently the main program).
-"""
-initiate_processes(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, lattice_type="3dsq", n_processes=8)
+    """
+    Uncomment this line to summon a number of processes to accumulate data. The only way to
+    stop them is to kill the terminal (or equivalently the main program).
+    """
+    # initiate_processes(N=10000, vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, lattice_type="3dsq", n_processes=6)
 
 
-"""
-Uncomment this line to load and view data in the pooled data file.
-"""
-# data = np.load("./SAW_data_files/saw_data_id_0_Nmax_10000_3dsq.npz")
-# print(data["N"])
-# print(np.shape(data["sm_ete_dists"]))
-# print(np.shape(data["sv_ete_dists"]))
-# print(data["sm_ete_dists"][:10])
-# print(data["sv_ete_dists"][:10])
+    # n_tot = 10
+    # for i in range(n_tot):
+    #     accumulate_data(vcv=VCV_SQUARE_3D, vti=VTI_SQUARE_3D, lattice_type="3dsq", id=0, N=10000)
+    #     print(f"{i} / {n_tot}")
 
-# plot_stats(data["sm_ete_dists"])
-# plot_stats(data["sv_ete_dists"])
+
+    """
+    Uncomment this line to load and view data in the pooled data file.
+    """
+    # data = np.load("./SAW_data_files/saw_data_id_0_Nmax_10000_3dsq.npz")
+    # print(data["N"])
+    # print(np.shape(data["sm_ete_dists"]))
+    # print(np.shape(data["sv_ete_dists"]))
+    # print(data["sm_ete_dists"][:10])
+    # print(data["sv_ete_dists"][:10])
+
+    # plot_stats(data["sm_ete_dists"])
+    # plot_stats(data["sv_ete_dists"])
+
+
+    """
+    Uncomment this line to plot a SAW.
+    """
+    plot_SAW(get_SAW_naive_v2())
